@@ -57,7 +57,8 @@ def run(rank, n_gpus, hps):
         writer = SummaryWriter(log_dir=hps.model_dir)
         writer_eval = SummaryWriter(log_dir=os.path.join(hps.model_dir, "eval"))
 
-    dist.init_process_group(backend='nccl', init_method='env://', world_size=n_gpus, rank=rank)
+    # for pytorch on win, backend use gloo    
+    dist.init_process_group(backend=  'gloo' if os.name == 'nt' else 'nccl', init_method='env://', world_size=n_gpus, rank=rank)
     torch.manual_seed(hps.train.seed)
     torch.cuda.set_device(rank)
 
@@ -222,6 +223,12 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
                                       os.path.join(hps.model_dir, "G_{}.pth".format(global_step)))
                 utils.save_checkpoint(net_d, optim_d, hps.train.learning_rate, epoch,
                                       os.path.join(hps.model_dir, "D_{}.pth".format(global_step)))
+
+                keep_ckpts = getattr(hps.train, 'keep_ckpts', 0)
+                if keep_ckpts > 0:
+                    utils.clean_checkpoints(path_to_models='logs/32k/', n_ckpts_to_keep=keep_ckpts, sort_by_time=True)
+
+
         global_step += 1
 
     if rank == 0:
